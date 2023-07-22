@@ -24,6 +24,5 @@
         android:orderInCategory="500"
         android:title="@string/action_quit"
         app:showAsAction="never"/>
-    
 
 </menu>

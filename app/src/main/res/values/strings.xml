@@ -12,4 +12,5 @@
     <string name="gps_not_found_title">GPS Not Enabled</string>
     <string name="yes">Yes</string>
     <string name="no">No</string>
+    <string name="nil">NIL</string>
 </resources>

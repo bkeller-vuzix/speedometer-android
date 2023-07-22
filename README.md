@@ -7,7 +7,7 @@ It does what it said on the tin and does not require unnecessary permissions
 ## Advantages
 * Lightweight
 * Only require GPS permission for detecting speed 
-* No unobtrusive ads
+* No obtrusive ads
 * Does exactly what it said on the tin, nothing more, nothing less :p 
 
 ## Download

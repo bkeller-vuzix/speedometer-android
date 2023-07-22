@@ -22,10 +22,12 @@ INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
-import android.content.DialogInterface;
+//import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -35,13 +37,8 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.PowerManager;
+//import android.os.PowerManager;
 import android.preference.PreferenceManager;
-import android.support.v4.app.NotificationCompat;
-import android.support.v4.app.TaskStackBuilder;
-import android.support.v7.app.ActionBarActivity;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatDialog;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -52,11 +49,21 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDialog;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.TaskStackBuilder;
+
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
 
-public class MainActivity extends ActionBarActivity {
+public class MainActivity extends AppCompatActivity {
 
 
+    public static final String TAG = "speedmeter";
     private TextView tvSpeed, tvUnit, tvLat, tvLon, tvAccuracy, tvHeading, tvMaxSpeed;
     private static final String[] unit = {"km/h", "mph", "meter/sec", "knots"};
     private int unitType;
@@ -66,18 +73,19 @@ public class MainActivity extends ActionBarActivity {
     private MainActivity activity;
 
     private SharedPreferences prefs;
+    private boolean mHasPermissions;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        tvSpeed = (TextView) findViewById(R.id.tvSpeed);
-        tvMaxSpeed = (TextView) findViewById(R.id.tvMaxSpeed);
-        tvUnit = (TextView) findViewById(R.id.tvUnitc);
-        tvLat = (TextView) findViewById(R.id.tvLat);
-        tvLon = (TextView) findViewById(R.id.tvLon);
-        tvAccuracy = (TextView) findViewById(R.id.tvAccuracy);
-        tvHeading = (TextView) findViewById(R.id.tvHeading);
+        tvSpeed = findViewById(R.id.tvSpeed);
+        tvMaxSpeed = findViewById(R.id.tvMaxSpeed);
+        tvUnit = findViewById(R.id.tvUnitc);
+        tvLat = findViewById(R.id.tvLat);
+        tvLon = findViewById(R.id.tvLon);
+        tvAccuracy = findViewById(R.id.tvAccuracy);
+        tvHeading = findViewById(R.id.tvHeading);
         Typeface font = Typeface.createFromAsset(getBaseContext().getAssets(), "font/lcdn.ttf");
         tvSpeed.setTypeface(font);
         tvLat.setTypeface(font);
@@ -98,96 +106,75 @@ public class MainActivity extends ActionBarActivity {
 
         if (savedInstanceState !=null) {
             maxSpeed = savedInstanceState.getDouble("maxspeed",-100.0);
-
         }
 
         if (!this.isLocationEnabled(this)) {
-
-
             //show dialog if Location Services is not enabled
-
 
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle(R.string.gps_not_found_title);  // GPS not found
             builder.setMessage(R.string.gps_not_found_message); // Want to enable?
-            builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface dialogInterface, int i) {
-
-                    Intent intent = new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                    activity.startActivity(intent);
-                }
+            builder.setPositiveButton(R.string.yes, (dialogInterface, i) -> {
+                Intent intent = new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(intent);
             });
 
             //if no - bring user to selecting Static Location Activity
-            builder.setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
-
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    Toast.makeText(activity, "Please enable Location-based service / GPS", Toast.LENGTH_LONG).show();
-
-
-                }
-
-
-            });
+            builder.setNegativeButton(R.string.no, (dialog, which) ->
+                    Toast.makeText(activity, "Please enable Location-based service / GPS", Toast.LENGTH_LONG).show()
+            );
             builder.create().show();
-
-
         }
 
 
-        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        PowerManager.WakeLock wakeLock = pm.newWakeLock(
-                PowerManager.SCREEN_DIM_WAKE_LOCK, "My wakelook");
+        //PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        //PowerManager.WakeLock wakeLock = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "My wakelook");
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-
-        new SpeedTask(this).execute("string");
-
-
-        tvSpeed.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View view, MotionEvent motionEvent) {
-
-                Intent intent = new Intent(getApplicationContext(), SettingsActivity.class);
-                startActivity(intent);
-
-                return false;
-            }
-
-
+        tvSpeed.setOnTouchListener((view, motionEvent) -> {
+            Intent intent = new Intent(getApplicationContext(), SettingsActivity.class);
+            startActivity(intent);
+            return false;
         });
-
-
     }
+    SpeedTask m_speedTask;
 
-    protected void onSaveInstanceState(Bundle bundle){
+    protected void onSaveInstanceState(@NonNull Bundle bundle){
         super.onSaveInstanceState(bundle);
-
         bundle.putDouble("maxspeed",maxSpeed);
-
-
-
     }
 
     protected void onRestoreInstanceState(Bundle bundle){
-
         super.onRestoreInstanceState(bundle);
-
         maxSpeed = bundle.getDouble("maxspeed",-100.0);
-
     }
 
-
+    PermissionsFragment.Listener permissionListener = new PermissionsFragment.Listener() {
+        @Override
+        public void permissionsGranted() {
+            mHasPermissions = true;
+            if(m_speedTask == null) {
+                m_speedTask = new SpeedTask(activity);
+                m_speedTask.execute("string");
+            }
+        }
+    };
     protected void onResume() {
         super.onResume();
+        if (!mHasPermissions) {
+            Log.d(TAG, "onResume - requesting permissions");
+            PermissionsFragment.init(this, permissionListener,
+                    new ArrayList<>(Arrays.asList(
+                            android.Manifest.permission.ACCESS_FINE_LOCATION,
+                            android.Manifest.permission.ACCESS_COARSE_LOCATION)));
+        } else {
+            Log.d(TAG, "onResume - have permissions");
+        }
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
         unitType = Integer.parseInt(prefs.getString("unit", "1"));
         maxSpeed = prefs.getFloat("maxspeed",-100.0f);
-
 
         tvUnit.setText(unit[unitType - 1]);
 
@@ -213,46 +200,29 @@ public class MainActivity extends ActionBarActivity {
             }
             NumberFormat numberFormat = NumberFormat.getNumberInstance();
             numberFormat.setMaximumFractionDigits(0);
-
             tvMaxSpeed.setText(numberFormat.format(maxSpeed * multiplier));
-
         }
-
         removeNotification();
-
-
     }
-
     protected void onStop() {
         super.onStop();
-
         displayNotification();
-
-
     }
 
     protected void onPause() {
         super.onPause();
 
-        float tempMaxpeed=0.0f;
+        float tempMaxpeed;
         try {
-
             tempMaxpeed=Float.parseFloat(tvMaxSpeed.getText().toString());
-
-
         } catch (java.lang.NumberFormatException nfe) {
-
             tempMaxpeed=0.0f;
-
         }
 
         prefs.edit().putFloat("maxSpeed",tempMaxpeed);
-
-
     }
 
     private  void displayNotification() {
-
         mbuilder.setSmallIcon(R.drawable.ic_stat_notification);
         mbuilder.setContentTitle("SpeedoMeter is running...");
         mbuilder.setContentText("Click to view");
@@ -265,13 +235,10 @@ public class MainActivity extends ActionBarActivity {
 
         stackBuilder.addNextIntent(resultIntent);
 
-        PendingIntent resultPendingIntent = stackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent resultPendingIntent = stackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         mbuilder.setContentIntent(resultPendingIntent);
 
-
         mnotice.notify(1337, mbuilder.build());
-
-
     }
 
     private void removeNotification() {
@@ -286,12 +253,12 @@ public class MainActivity extends ActionBarActivity {
         dialog.setCancelable(true);
 
         // text
-        TextView text = (TextView) dialog.findViewById(R.id.tvAbout);
+        TextView text = dialog.findViewById(R.id.tvAbout);
 
-        text.setText( getString(R.string.txtLicense));
+        text.setText(R.string.txtLicense);
 
         // icon image
-        ImageView img = (ImageView) dialog.findViewById(R.id.ivAbout);
+        ImageView img = dialog.findViewById(R.id.ivAbout);
         img.setImageResource(R.drawable.ic_launcher);
 
         dialog.show();
@@ -311,25 +278,23 @@ public class MainActivity extends ActionBarActivity {
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
 
-        switch (item.getItemId()) {
-            case R.id.action_settings:
-                Intent intent = new Intent();
-                intent.setClass(this, SettingsActivity.class);
-                startActivity(intent);
-                return true;
-            case R.id.action_quit:
-                this.finish();
-                System.exit(0);
-                return true;
-            case R.id.action_about:
-                try {
-                    this.showDialog();
-                } catch (NameNotFoundException e) {
+        if (item.getItemId() ==  R.id.action_settings) {
+            Intent intent = new Intent();
+            intent.setClass(this, SettingsActivity.class);
+            startActivity(intent);
+            return true;
+        } else if (item.getItemId() == R.id.action_quit) {
+            this.finish();
+            System.exit(0);
+            return true;
+        } else if (item.getItemId() == R.id.action_about) {
+            try {
+                this.showDialog();
+            } catch (NameNotFoundException e) {
 
-                    e.printStackTrace();
-                }
-                return true;
-
+                e.printStackTrace();
+            }
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
@@ -353,12 +318,14 @@ public class MainActivity extends ActionBarActivity {
 
         }
 
+        @SuppressLint("MissingPermission")
         protected void onPostExecute(String result) {
             tvUnit.setText(unit[unitType - 1]);
             LocationListener listener = new LocationListener() {
                 float filtSpeed;
                 float localspeed;
 
+                @SuppressLint("SetTextI18n")
                 @Override
                 public void onLocationChanged(Location location) {
                     speed = location.getSpeed();
@@ -399,7 +366,7 @@ public class MainActivity extends ActionBarActivity {
 
                     lat = location.getLatitude();
                     //speed=(float) location.getLatitude();
-                    Log.d("net.mypapit.speedview", "Speed " + localspeed + "latitude: " + lat + " longitude: " + location.getLongitude());
+                    Log.d(TAG, "Speed " + localspeed + "latitude: " + lat + " longitude: " + location.getLongitude());
                     tvSpeed.setText(numberFormat.format(filtSpeed));
 
                     tvMaxSpeed.setText(numberFormat.format(maxSpeed * multiplier));
@@ -407,7 +374,7 @@ public class MainActivity extends ActionBarActivity {
                     if (location.hasAltitude()) {
                         tvAccuracy.setText(numberFormat.format(location.getAccuracy()) + " m");
                     } else {
-                        tvAccuracy.setText("NIL");
+                        tvAccuracy.setText(R.string.nil);
                     }
 
                     numberFormat.setMaximumFractionDigits(0);
@@ -439,7 +406,7 @@ public class MainActivity extends ActionBarActivity {
 
                         tvHeading.setText(strBearing);
                     } else {
-                        tvHeading.setText("NIL");
+                        tvHeading.setText(R.string.nil);
                     }
 
                     NumberFormat nf = NumberFormat.getInstance();
@@ -462,7 +429,7 @@ public class MainActivity extends ActionBarActivity {
                 @Override
                 public void onProviderEnabled(String provider) {
                     tvSpeed.setText("STDBY");
-                    tvMaxSpeed.setText("NIL");
+                    tvMaxSpeed.setText(R.string.nil);
 
                     tvLat.setText("LATITUDE");
                     tvLon.setText("LONGITUDE");
@@ -485,10 +452,8 @@ public class MainActivity extends ActionBarActivity {
 
             };
 
-
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, listener);
-
-
+            if(mHasPermissions)
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, listener);
         }
 
         /**
@@ -508,19 +473,11 @@ public class MainActivity extends ActionBarActivity {
             // Calculate new filtered value
             return (float) (curr / ratio + prev * (1.0 - 1.0 / ratio));
         }
-
-
     }
 
-    private boolean isLocationEnabled(Context mContext) {
-
-
+    private boolean isLocationEnabled(Context iContext) {
         LocationManager locationManager = (LocationManager)
-                mContext.getSystemService(Context.LOCATION_SERVICE);
+                iContext.getSystemService(Context.LOCATION_SERVICE);
         return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
     }
-
-
 }
-
-
